@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        java: [8, 9, 10, 11, 12, 13]
+        java: [6, 7, 8, 9, 10, 11, 12, 13]
     steps:
     - name: Setup java
       uses: actions/setup-java@v1
