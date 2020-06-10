@@ -1,31 +1,22 @@
 
-
-plugins {
-  id 'network.ockam.gradle.host' version '1.0.0'
-  id 'network.ockam.gradle.builders' version '1.0.0'
-}
-
 task build {
-  onlyIf { host.debianBuilder.enabled }
+  println 'go build'
   doLast {
-    builderExec 'debian', {
-      script '''
-        go build
-      '''
-    }
+    println 'go build'
   }
 }
 
 task test {
-  onlyIf { host.debianBuilder.enabled }
+  println 'go test'
+  dependsOn build
   doLast {
-    builderExec 'debian', {
-      script '''
-        go test
-      '''
-    }
+    println 'go test'
   }
 }
 
 task clean {
+  println 'go clean'
+  doLast {
+    println 'go clean'
+  }
 }

@@ -1,8 +1,9 @@
 
 rootProject.name = 'ockam'
 
-boolean inComposite = gradle.parent != null
-if (!inComposite) {
-  includeBuild 'tools/gradle/plugins/host'
-  includeBuild 'tools/gradle/plugins/builder'
-}
+includeBuild 'implementations/c'
+includeBuild 'implementations/elixir'
+includeBuild 'implementations/go'
+includeBuild 'implementations/javascript'
+includeBuild 'implementations/rust'
+includeBuild 'implementations/swift'

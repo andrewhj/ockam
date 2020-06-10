@@ -1,33 +1,24 @@
 
-plugins {
-  id 'network.ockam.gradle.host' version '1.0.0'
-  id 'network.ockam.gradle.builders' version '1.0.0'
-}
-
 task build {
-  onlyIf { host.debianBuilder.enabled }
+  println 'rust build'
+  dependsOn gradle.includedBuild('c').task(':build')
   doLast {
-    builderExec 'debian', {
-      script '''
-        cargo build
-      '''
-    }
+    println 'rust build'
   }
 }
 
 task test {
-  onlyIf { host.debianBuilder.enabled }
+  println 'rust test'
+  dependsOn build
   doLast {
-    builderExec 'debian', {
-      script '''
-        cargo test
-      '''
-    }
+    println 'rust test'
   }
 }
 
 task clean {
+  println 'rust clean'
+  dependsOn gradle.includedBuild('c').task(':clean')
   doLast {
-    delete 'target'
+    println 'rust clean'
   }
 }

@@ -1,26 +1,22 @@
 
-plugins {
-  id 'network.ockam.gradle.host' version '1.0.0'
-  id 'network.ockam.gradle.builders' version '1.0.0'
-}
-
 task build {
-  onlyIf { host.macosBuilder.enabled }
+  println 'swift build'
   doLast {
-    builderExec 'macos', {
-      script '''
-        swift build
-      '''
-    }
+    println 'swift build'
   }
 }
 
 task test {
-  dependsOn gradle.includedBuild('Swift_Tests_Runner').task(':test')
+  println 'swift test'
+  dependsOn build
+  doLast {
+    println 'swift test'
+  }
 }
 
 task clean {
+  println 'swift clean'
   doLast {
-    delete '.build'
+    println 'swift clean'
   }
 }
