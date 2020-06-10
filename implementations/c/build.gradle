@@ -3,6 +3,9 @@ task build {
   println 'c build'
   doLast {
     println 'c build'
+    exec {
+      commandLine 'docker', 'info'
+    }
   }
 }
 
