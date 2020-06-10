@@ -1,7 +1,7 @@
 name: Nightly
 on:
   schedule:
-    - cron:  '20 17 * * *'
+    - cron: '45 0 * * *'
 jobs:
   build:
     name: Build
