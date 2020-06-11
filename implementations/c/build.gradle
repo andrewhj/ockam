@@ -14,7 +14,6 @@ def buildDir = '_build'
 
     def taskNameSuffix = "_${buildType.toLowerCase()}_${toolchain.name}"
 
-
     task "setup_target_dir${taskNameSuffix}" {
       doLast {
         mkdir targetDirPath
@@ -44,13 +43,6 @@ def buildDir = '_build'
 
     task "build${taskNameSuffix}" {
       group toolchain.name
-      // dependsOn "create_docker_file${taskNameSuffix}"
-      // doLast {
-      //   exec {
-      //     commandLine 'cat', '_build/x86_64-unknown-linux-gnu/release/Dockerfile'
-      //   }
-      // }
-
       dependsOn "build_image${taskNameSuffix}"
       doLast {
         exec {
@@ -68,7 +60,20 @@ def buildDir = '_build'
       group toolchain.name
     }
 
+    task "remove_target_dir${taskNameSuffix}" {
+      group toolchain.name
+      dependsOn "build_image${taskNameSuffix}"
+      doLast {
+        exec {
+          commandLine 'docker', 'run', '--rm', '--volume', "${projectDir}:/work", 'ockam/implementations/c', 'bash', '-c', """
+            rm -rf ${buildDir}/${toolchain.name}/${buildType.toLowerCase()};
+          """
+        }
+      }
+    }
+
     task "remove_image${taskNameSuffix}" {
+      dependsOn "remove_target_dir${taskNameSuffix}"
       doLast {
         exec {
           commandLine 'docker', 'rmi', 'ockam/implementations/c'
@@ -81,11 +86,6 @@ def buildDir = '_build'
     task "clean${taskNameSuffix}" {
       group toolchain.name
       dependsOn "remove_image${taskNameSuffix}"
-      doLast {
-        exec {
-          commandLine 'rm', '-rf', targetDirPath.toString()
-        }
-      }
     }
 
   }
@@ -100,7 +100,7 @@ task test {
 }
 
 task clean {
-  dependsOn 'clean_debug_x86_64-unknown-linux-gnu', 'clean_release_x86_64-unknown-linux-gnu'
+  dependsOn 'clean_release_x86_64-unknown-linux-gnu'
   doLast {
     delete buildDir
   }
