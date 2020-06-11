@@ -16,8 +16,6 @@ def buildDir = '_build'
 
 
     task "setup_target_dir${taskNameSuffix}" {
-      group toolchain.name
-      onlyIf { !file(targetDirPath).exists() }
       doLast { mkdir targetDirPath }
     }
 
