@@ -9,24 +9,26 @@ def buildDir = '_build'
 
   ['Release', 'Debug'].each { buildType ->
 
-    def targetBir  = Paths.get(buildDir, toolchain.name, buildType).toFile()
-    def taskNameSuffix = "_${buildType.toLowerCase()}_${toolchain.name}"
-    def dockerFile = Paths.get(buildDir, toolchain.name, buildType, 'Dockerfile').toFile()
+    def targetDirPath = Paths.get(buildDir, toolchain.name.digest('SHA-256'), buildType.toLowerCase())
+    def dockerFilePath = Paths.get(targetDirPath.toString(), 'Dockerfile')
 
-    task "setup_build_dir${taskNameSuffix}" {
+    def taskNameSuffix = "_${buildType.toLowerCase()}_${toolchain.name}"
+
+
+    task "setup_target_dir${taskNameSuffix}" {
       group toolchain.name
-      onlyIf { !file(targetBir ).exists() }
-      doLast { mkdir targetBir  }
+      onlyIf { !file(targetDirPath).exists() }
+      doLast { mkdir targetDirPath }
     }
 
     task "create_docker_file${taskNameSuffix}" {
-      dependsOn "setup_build_dir${taskNameSuffix}"
-      onlyIf { !file(dockerFile).exists() }
+      dependsOn "setup_target_dir${taskNameSuffix}"
+      onlyIf { !file(dockerFilePath).exists() }
       doLast {
-        dockerFile.text = '''\
-          FROM ockam/builder_c
+        dockerFilePath.toFile().text = """\
+          FROM ${toolchain.image}
           WORKDIR /work
-        '''.stripIndent()
+        """.stripIndent()
       }
     }
 
@@ -34,10 +36,29 @@ def buildDir = '_build'
       dependsOn "create_docker_file${taskNameSuffix}"
       doLast {
         exec {
-          workingDir targetBir
+          workingDir targetDirPath
           commandLine 'docker', 'build', '-t', 'ockam/implementations/c', '.'
         }
       }
+    }
+
+    task "build${taskNameSuffix}" {
+      group toolchain.name
+      dependsOn "build_image${taskNameSuffix}"
+      doLast {
+        exec {
+          commandLine 'docker', 'run', '--rm', '--volume', "${projectDir}:/work", 'ockam/implementations/c', 'bash', '-c', """
+            set -e;
+            cd ${buildDir}/${toolchain.name.digest('SHA-256')}/${buildType.toLowerCase()};
+            cmake -DCMAKE_BUILD_TYPE=${buildType} -DOCKAM_BUILD_TESTS=ON -DOCKAM_TARGET_PLATFORM="linux" ../../..;
+            cmake --build .;
+          """
+        }
+      }
+    }
+
+    task "test${taskNameSuffix}" {
+      group toolchain.name
     }
 
     task "remove_image${taskNameSuffix}" {
@@ -50,30 +71,11 @@ def buildDir = '_build'
       }
     }
 
-    task "build${taskNameSuffix}" {
-      group toolchain.name
-      dependsOn "build_image${taskNameSuffix}"
-      doLast {
-        exec {
-          commandLine 'docker', 'run', '--rm', '--volume', "${projectDir}:/work", 'ockam/implementations/c', 'bash', '-c', """
-            set -e;
-            cd ${buildDir}/${toolchain.name}/${buildType};
-            cmake -DCMAKE_BUILD_TYPE=${buildType} -DOCKAM_BUILD_TESTS=ON -DOCKAM_TARGET_PLATFORM="linux" ../../..;
-            cmake --build .;
-          """
-        }
-      }
-    }
-
-    task "test${taskNameSuffix}" {
-      group toolchain.name
-    }
-
     task "clean${taskNameSuffix}" {
       group toolchain.name
       dependsOn "remove_image${taskNameSuffix}"
       doLast {
-        delete targetBir
+        delete targetDirPath
       }
     }
 
