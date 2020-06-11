@@ -25,7 +25,7 @@ def buildDir = '_build'
       dependsOn "setup_target_dir${taskNameSuffix}"
       onlyIf { !file(dockerFilePath).exists() }
       doLast {
-        dockerFilePath.toFile().text = """\
+        dockerFilePath.toFile().write """\
           FROM ${toolchain.image}
           WORKDIR /work
         """.stripIndent()
