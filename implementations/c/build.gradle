@@ -9,7 +9,7 @@ def buildDir = '_build'
 
   ['Release', 'Debug'].each { buildType ->
 
-    def targetDirPath = Paths.get(buildDir, toolchain.name.digest('SHA-256'), buildType.toLowerCase())
+    def targetDirPath = Paths.get(buildDir, toolchain.name, buildType.toLowerCase())
     def dockerFilePath = Paths.get(targetDirPath.toString(), 'Dockerfile')
 
     def taskNameSuffix = "_${buildType.toLowerCase()}_${toolchain.name}"
@@ -44,7 +44,7 @@ def buildDir = '_build'
 
     task "build${taskNameSuffix}" {
       group toolchain.name
-      dependsOn "create_docker_file${taskNameSuffix}"
+      // dependsOn "create_docker_file${taskNameSuffix}"
       doLast {
         exec {
           commandLine 'ls', '_build/1bb87e07be9e52fc0dca53a1c0718fac23e8b4202b9c346e12f075762507a544/release'
@@ -56,7 +56,7 @@ def buildDir = '_build'
       //   exec {
       //     commandLine 'docker', 'run', '--rm', '--volume', "${projectDir}:/work", 'ockam/implementations/c', 'bash', '-c', """
       //       set -e;
-      //       cd ${buildDir}/${toolchain.name.digest('SHA-256')}/${buildType.toLowerCase()};
+      //       cd ${buildDir}/${toolchain.name}/${buildType.toLowerCase()};
       //       cmake -DCMAKE_BUILD_TYPE=${buildType} -DOCKAM_BUILD_TESTS=ON -DOCKAM_TARGET_PLATFORM="linux" ../../..;
       //       cmake --build .;
       //     """
