@@ -1,24 +1,29 @@
 
 task build {
+  def buildDir = '_build/x86_64-unknown-linux-gnu/debug'
   onlyIf { !file('_build').exists() }
   doLast {
-    def buildDir = '_build/x86_64-unknown-linux-gnu/debug'
     mkdir buildDir
-
+  }
+  doLast {
     def dockerFile = new File(buildDir + '/Dockerfile')
     dockerFile.write '''\
       FROM ockam/builder_c
       WORKDIR /work
     '''.stripIndent()
-
+  }
+  doLast {
     exec {
       commandLine 'docker', 'rmi', 'ockam/implementations/c'
     }
+  }
+  doLast {
     exec {
       workingDir buildDir
       commandLine 'docker', 'build', '-t', 'ockam/implementations/c', '.'
     }
-
+  }
+  doLast {
     exec {
       commandLine 'docker', 'run', '--rm', '--volume', "${projectDir}:/work", 'ockam/implementations/c', 'bash', '-c', '''
         set -e;
