@@ -82,7 +82,9 @@ def buildDir = '_build'
       group toolchain.name
       dependsOn "remove_image${taskNameSuffix}"
       doLast {
-        delete targetDirPath
+        exec {
+          commandLine 'rm', '-rf', targetDirPath.toString()
+        }
       }
     }
 
