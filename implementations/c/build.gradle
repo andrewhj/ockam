@@ -16,7 +16,9 @@ def buildDir = '_build'
 
 
     task "setup_target_dir${taskNameSuffix}" {
-      doLast { mkdir targetDirPath }
+      doLast {
+        mkdir targetDirPath
+      }
     }
 
     task "create_docker_file${taskNameSuffix}" {
@@ -42,7 +44,7 @@ def buildDir = '_build'
 
     task "build${taskNameSuffix}" {
       group toolchain.name
-      // dependsOn "create_docker_file${taskNameSuffix}"
+      dependsOn "setup_target_dir${taskNameSuffix}"
       doLast {
         exec {
           commandLine 'ls', '_build/x86_64-unknown-linux-gnu/release'
