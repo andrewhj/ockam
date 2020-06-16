@@ -1,106 +1,140 @@
 
 import java.nio.file.Paths
 
-def buildDir = '_build'
+// override the build directory
+project.buildDir = '_build'
 
-[
-  [name: 'x86_64-unknown-linux-gnu', image: 'ockam/builder_c']
-].each { toolchain ->
+// assume a release build by default unless the debug property is specified
+ext.buildType = 'release'
+if(project.hasProperty('debug')) {
+  ext.buildType = (project.debug.equalsIgnoreCase('true')) ? 'debug' : 'release'
+}
 
-  ['Release', 'Debug'].each { buildType ->
+ext.uid = ["id", "-u", System.properties['user.name']].execute().text.trim()
 
-    def targetDirPath = Paths.get(buildDir, toolchain.name, buildType.toLowerCase())
-    def dockerFilePath = Paths.get(targetDirPath.toString(), 'Dockerfile')
+ext.dockerImage = projectDir.toString().digest('SHA-256').take(10)
 
-    def taskNameSuffix = "_${buildType.toLowerCase()}_${toolchain.name}"
+def defineDockerBasedTasks(project, host, target) {
+  // the host is expected to have the format image_name:tag
+  def (hostName, hostTag) = host.split(':')
 
-    task "setup_target_dir${taskNameSuffix}" {
-      doLast {
-        mkdir targetDirPath
+  def buildType = project.buildType
+  def cmakeBuildType = buildType.substring(0, 1).toUpperCase() + buildType.substring(1)
+
+  def buildDir = Paths.get(project.buildDir.toString(), hostTag, target, buildType)
+  def buildDirUnixPath = "_build/${hostTag}/${target}/${buildType}"
+
+  def dockerFile = Paths.get(buildDir.toString(), 'Dockerfile')
+  def imageCreatedFlag = Paths.get(buildDir.toString(), 'docker_image_created')
+  def cmakeCache = Paths.get(buildDir.toString(), 'CMakeCache.txt')
+
+  def buildImageName = "${project.dockerImage}:${hostTag}__${target}__${buildType}"
+  def taskNameSuffix = "_${hostTag}_${target}"
+
+  task "setup_build_dir${taskNameSuffix}" {
+    doLast { mkdir buildDir }
+  }
+
+  task "create_docker_file${taskNameSuffix}" {
+    dependsOn "setup_build_dir${taskNameSuffix}"
+    onlyIf { !file(dockerFile).exists() }
+    doLast { file(dockerFile).write "FROM ${host}\nWORKDIR /work"}
+  }
+
+  task "build_image${taskNameSuffix}" {
+    dependsOn "create_docker_file${taskNameSuffix}"
+    onlyIf { !file(imageCreatedFlag).exists() }
+    doLast {
+      exec {
+        workingDir buildDir
+        commandLine 'docker', 'build', '-t', buildImageName, '.'
       }
+      file(imageCreatedFlag).write ''
     }
+  }
 
-    task "create_docker_file${taskNameSuffix}" {
-      dependsOn "setup_target_dir${taskNameSuffix}"
-      onlyIf { !file(dockerFilePath).exists() }
-      doLast {
-        file(dockerFilePath).write """\
-          FROM ${toolchain.image}
-          WORKDIR /work
-        """.stripIndent()
-      }
-    }
-
-    task "build_image${taskNameSuffix}" {
-      dependsOn "create_docker_file${taskNameSuffix}"
-      doLast {
-        exec {
-          workingDir targetDirPath
-          commandLine 'docker', 'build', '-t', 'ockam/implementations/c', '.'
-        }
-      }
-    }
-
-    task "build${taskNameSuffix}" {
-      group toolchain.name
-      dependsOn "build_image${taskNameSuffix}"
-      doLast {
-        exec {
-          commandLine 'docker', 'run', '--rm', '--volume', "${projectDir}:/work", 'ockam/implementations/c', 'bash', '-c', """
+  task "generate_project${taskNameSuffix}" {
+    dependsOn "build_image${taskNameSuffix}"
+    onlyIf { !file(cmakeCache).exists() }
+    doLast {
+      exec {
+        commandLine 'docker', 'run', '--rm', '-e', "LOCAL_USER_ID=${uid}", '--volume', "${projectDir}:/work", buildImageName,
+          'bash', '-c', """
             set -e;
-            cd ${buildDir}/${toolchain.name}/${buildType.toLowerCase()};
-            cmake -DCMAKE_BUILD_TYPE=${buildType} -DOCKAM_BUILD_TESTS=ON -DOCKAM_TARGET_PLATFORM="linux" ../../..;
+            cd ${buildDirUnixPath};
+            cmake \
+              -DCMAKE_BUILD_TYPE=${cmakeBuildType} \
+              -DOCKAM_BUILD_TESTS=ON \
+              -DOCKAM_TARGET_PLATFORM="linux" ../../../..;
+          """
+      }
+    }
+  }
+
+  task "build${taskNameSuffix}" {
+    dependsOn "generate_project${taskNameSuffix}"
+    doLast {
+      exec {
+        commandLine 'docker', 'run', '--rm', '-e', "LOCAL_USER_ID=${uid}", '--volume', "${projectDir}:/work", buildImageName,
+          'bash', '-c', """
+            set -e;
+            cd ${buildDirUnixPath};
             cmake --build .;
           """
-        }
       }
     }
+  }
 
-    task "test${taskNameSuffix}" {
-      group toolchain.name
-    }
-
-    task "remove_target_dir${taskNameSuffix}" {
-      group toolchain.name
-      dependsOn "build_image${taskNameSuffix}"
-      doLast {
-        exec {
-          commandLine 'docker', 'run', '--rm', '--volume', "${projectDir}:/work", 'ockam/implementations/c', 'bash', '-c', """
-            rm -rf ${buildDir}/${toolchain.name}/${buildType.toLowerCase()};
+  task "test${taskNameSuffix}" {
+    dependsOn "build${taskNameSuffix}"
+    doLast {
+      exec {
+        commandLine 'docker', 'run', '--rm', '-e', "LOCAL_USER_ID=${uid}", '--volume', "${projectDir}:/work", buildImageName,
+          'bash', '-c', """
+            set -e;
+            cd ${buildDirUnixPath};
+            ctest --verbose;
           """
-        }
       }
     }
+  }
 
-    task "remove_image${taskNameSuffix}" {
-      dependsOn "remove_target_dir${taskNameSuffix}"
-      doLast {
-        exec {
-          commandLine 'docker', 'rmi', 'ockam/implementations/c'
-          ignoreExitValue true
-          errorOutput = new ByteArrayOutputStream()
-        }
+  task "remove_build_dir${taskNameSuffix}" {
+    doLast { delete buildDir }
+  }
+
+  task "remove_image${taskNameSuffix}" {
+    dependsOn "remove_build_dir${taskNameSuffix}"
+    doLast {
+      exec {
+        commandLine 'docker', 'rmi', buildImageName
+        ignoreExitValue true
+        errorOutput = new ByteArrayOutputStream()
       }
     }
+  }
 
-    task "clean${taskNameSuffix}" {
-      group toolchain.name
-      dependsOn "remove_image${taskNameSuffix}"
-    }
-
+  task "clean${taskNameSuffix}" {
+    dependsOn "remove_image${taskNameSuffix}"
   }
 }
 
+[
+  [host: 'ockam/builder:debian-10.4_cmake-3.17.3_gcc-8.3.0-6_x86_64-linux-gnu', target: 'x86_64-unknown-linux-gnu']
+].each { environment ->
+  defineDockerBasedTasks(project, environment.host, environment.target)
+}
+
 task build {
-  dependsOn 'build_release_x86_64-unknown-linux-gnu'
+  dependsOn 'build_debian-10.4_cmake-3.17.3_gcc-8.3.0-6_x86_64-linux-gnu_x86_64-unknown-linux-gnu'
 }
 
 task test {
-  dependsOn 'test_release_x86_64-unknown-linux-gnu'
+  dependsOn 'test_debian-10.4_cmake-3.17.3_gcc-8.3.0-6_x86_64-linux-gnu_x86_64-unknown-linux-gnu'
 }
 
 task clean {
-  dependsOn 'clean_release_x86_64-unknown-linux-gnu'
+  dependsOn 'clean_debian-10.4_cmake-3.17.3_gcc-8.3.0-6_x86_64-linux-gnu_x86_64-unknown-linux-gnu'
   doLast {
     delete buildDir
   }
